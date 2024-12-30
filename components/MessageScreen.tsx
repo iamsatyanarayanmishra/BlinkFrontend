@@ -1,100 +1,186 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, FlatList, Image, StyleSheet, StatusBar, SafeAreaView, Dimensions, Platform, Modal } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import {View, Text, TextInput, TouchableOpacity, FlatList, Image, StyleSheet, StatusBar, SafeAreaView, Dimensions, Platform, Modal, } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Entypo from '@expo/vector-icons/Entypo';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import ChatModal from './ChatModal';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
-import SockJS from 'sockjs-client';
 import { Client } from '@stomp/stompjs';
+import SockJS from 'sockjs-client';
 
 const { width, height } = Dimensions.get('window');
 
 // Dummy Data for conversation
-type Message = {
-  id: string;
-  text?: string;
-  time: string;
-  type: 'sent' | 'received';
-  image?: { uri: string };
+// const messagesData = [
+//   {
+//     id: '1',
+//     text: 'Hello, how are you?',
+//     time: '8:24 AM',
+//     type: 'received',
+//   },
+//   {
+//     id: '2',
+//     text: 'I am good man... You?',
+//     time: '8:24 AM',
+//     type: 'sent',
+//   },
+//   {
+//     id: '3',
+//     text: 'I\'m doing well, thank you for asking! How can I help you today?',
+//     time: '8:24 AM',
+//     type: 'received',
+//   },
+//   {
+//     id: '4',
+//     text: 'Can you send me 12,000 rupees now, I need to purchase a shoe',
+//     time: '8:24 AM',
+//     type: 'sent',
+//   },
+//   {
+//     id: '5',
+//     text: 'Cool I\'m sending now 😎',
+//     time: '8:25 AM',
+//     type: 'received',
+//   },
+//   {
+//     id: '6',
+//     text: 'Nice fit dude... 😎',
+//     time: '8:26 AM',
+//     type: 'received',
+//     image: 'https://images.pexels.com/photos/1387022/pexels-photo-1387022.jpeg?cs=srgb&dl=book-aesthetic-books-old-books-open-books-1387022.jpg&fm=jpg',
+//   },
+//   {
+//     id: '7',
+//     // text: 'Nice fit dude... 😎',
+//     time: '8:26 AM',
+//     type: 'sent',
+//     image: require('@/assets/images/Avatar4.jpg'),
+//   },
+// ];
+
+// Ensure initial dummy data has unique IDs
+// const ensureUniqueIds = (data) => {
+//   const existingIds = new Set();
+//   return data.map(item => {
+//     let id = item.id;
+//     while (existingIds.has(id)) {
+//       id = generateRandomId([...existingIds]);
+//     }
+//     existingIds.add(id);
+//     return { ...item, id };
+//   });
+// };
+
+// Check for duplicate IDs in the initial dummy data
+// const checkForDuplicateIds = (data) => {
+//   const ids = data.map(item => item.id);
+//   const hasDuplicates = ids.some((id, index) => ids.indexOf(id) !== index);
+//   if (hasDuplicates) {
+//     console.error("Duplicate IDs found in initial data:", ids);
+//   }
+// };
+
+const generateRandomId = (existingIds) => {
+  let id;
+  do {
+    id = Math.random().toString(36).substr(2, 9);
+  } while (existingIds.includes(id));
+  return id;
 };
 
-const messagesData: Message[] = [
-  // ...existing messagesData...
-];
-
-import { StackNavigationProp } from '@react-navigation/stack';
-import { RouteProp } from '@react-navigation/native';
-
-type RootStackParamList = {
-  ChatScreen: { chatData: any };
-  VoiceCallScreen: { chatData: any };
-  StarredMessagesScreen: undefined;
-};
-
-type ChatScreenRouteProp = RouteProp<RootStackParamList, 'ChatScreen'>;
-type ChatScreenNavigationProp = StackNavigationProp<RootStackParamList, 'ChatScreen'>;
-
-const ChatScreen = ({ route, navigation }: { route: ChatScreenRouteProp; navigation: ChatScreenNavigationProp }) => {
+const ChatScreen = ({ route, navigation }) => {
   const { chatData } = route.params;
-  const [messages, setMessages] = useState(messagesData);
+  const [messages, setMessages] = useState([]); // Initialize with an empty array
   const [text, setText] = useState('');
   const [modalVisible, setModalVisible] = useState(false);
   const [starredMessages, setStarredMessages] = useState({});
   const [attachmentModalVisible, setAttachmentModalVisible] = useState(false);
-  const [stompClient, setStompClient] = useState<Client | null>(null);
+  const client = useRef(null);
+
+  // Check for duplicate IDs in the initial dummy data
+  // useEffect(() => {
+  //   checkForDuplicateIds(messages);
+  // }, []);
 
   useEffect(() => {
+    // Initialize WebSocket connection using SockJS
     const socket = new SockJS('http://192.168.1.226:8080/ws');
-    const client = new Client({
+    client.current = new Client({
       webSocketFactory: () => socket,
-      debug: (str) => {
+      connectHeaders: {
+        login: 'user',
+        passcode: 'password',
+      },
+      debug: function (str) {
         console.log(str);
       },
-      onConnect: () => {
-        console.log('Connected');
-        client.subscribe('/user/queue/messages', (message) => {
-          const receivedMessage = JSON.parse(message.body);
-          setMessages((prevMessages) => [...prevMessages, receivedMessage]);
-        });
-      },
-      onStompError: (frame) => {
-        console.error('Broker reported error: ' + frame.headers['message']);
-        console.error('Additional details: ' + frame.body);
-      },
+      reconnectDelay: 5000,
+      heartbeatIncoming: 4000,
+      heartbeatOutgoing: 4000,
     });
 
-    client.activate();
-    setStompClient(client);
+    client.current.onConnect = () => {
+      console.log('Connected to WebSocket');
+      client.current.subscribe('/chatroom/public', (message) => {
+        const receivedMessage = JSON.parse(message.body);
+        setMessages((prevMessages) => {
+          const updatedMessages = [...prevMessages, receivedMessage];
+          const ids = updatedMessages.map(msg => msg.id);
+          const hasDuplicates = ids.some((id, index) => ids.indexOf(id) !== index);
+          if (hasDuplicates) {
+            console.error("Duplicate IDs found:", ids);
+          }
+          return updatedMessages;
+        });
+      });
+    };
+
+    client.current.onStompError = (frame) => {
+      console.error('Broker reported error: ' + frame.headers['message']);
+      console.error('Additional details: ' + frame.body);
+    };
+
+    client.current.activate();
 
     return () => {
-      if (client) {
-        client.deactivate();
+      if (client.current) {
+        client.current.deactivate();
       }
     };
   }, []);
 
+  const openModal = () => setModalVisible(true);
+  const closeModal = () => setModalVisible(false);
+
   const handleSend = () => {
-    if (text && stompClient) {
+    if (text) {
+      const existingIds = messages.map(message => message.id);
       const newMessage = {
-        id: Math.random().toString(),
-        text,
+        id: generateRandomId(existingIds), // Use custom function to generate a unique ID
+        type: 'TEXT',
+        content: text,
+        sender: 'QQYU5ZWG', // Assuming chatData contains senderId
+        recipient: 'SV912UKB', // Assuming chatData contains recipientId
         time: new Date().toLocaleTimeString(),
-        type: 'CHAT',
-        recipient: chatData.userName, // Assuming chatData contains recipient's username
       };
-      stompClient.publish({
-        destination: '/app/chat.sendToUser',
+      console.log("New message ID:", newMessage.id); // Log the new message ID
+      client.current.publish({
+        destination: '/app/message',
         body: JSON.stringify(newMessage),
       });
-      setMessages((prevMessages) => [...prevMessages, newMessage]);
+      setMessages((prevMessages) => {
+        const updatedMessages = [...prevMessages, newMessage];
+        const ids = updatedMessages.map(msg => msg.id);
+        const hasDuplicates = ids.some((id, index) => ids.indexOf(id) !== index);
+        if (hasDuplicates) {
+          console.error("Duplicate IDs found:", ids);
+        }
+        return updatedMessages;
+      });
       setText('');
     }
   };
-
-  const openModal = () => setModalVisible(true);
-  const closeModal = () => setModalVisible(false);
 
   const openAttachmentModal = () => setAttachmentModalVisible(true);
   const closeAttachmentModal = () => setAttachmentModalVisible(false);
@@ -152,6 +238,7 @@ const ChatScreen = ({ route, navigation }: { route: ChatScreenRouteProp; navigat
           isSent ? styles.sentMessage : styles.receivedMessage,
         ]}
       >
+        
         {item.image && (
           <Image 
             source={item.image}
@@ -188,6 +275,8 @@ const ChatScreen = ({ route, navigation }: { route: ChatScreenRouteProp; navigat
       </TouchableOpacity>
     );
   };
+  
+  
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -221,6 +310,7 @@ const ChatScreen = ({ route, navigation }: { route: ChatScreenRouteProp; navigat
         renderItem={renderMessage}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.messagesList}
+        
       />
 
       <View style={styles.footer}>
@@ -347,21 +437,9 @@ const styles = StyleSheet.create({
   messageText: {
     fontSize: width * 0.04,
   },
-  sentMessageText: {
-    color: '#fff',
-  },
-  receivedMessageText: {
-    color: '#000',
-  },
-  sentTime: {
+  timeText: {
     fontSize: width * 0.03,
     color: '#fff',
-    alignSelf: 'flex-end',
-    marginTop: height * 0.005,
-  },
-  receivedTime: {
-    fontSize: width * 0.03,
-    color: '#000',
     alignSelf: 'flex-end',
     marginTop: height * 0.005,
   },
@@ -418,11 +496,14 @@ const styles = StyleSheet.create({
   },
   attachmentModalContainer: {
     flex: 1,
+    // height: 100,
+    // backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'flex-end',
     alignItems: 'center',
   },
   attachmentOptions: {
     width: width * 0.95,
+    // height: 200,
     padding: 20,
     bottom: 80,
     paddingHorizontal: 20,
@@ -448,6 +529,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     marginVertical: height * 0.01,
   }
+  
 });
 
 export default ChatScreen;

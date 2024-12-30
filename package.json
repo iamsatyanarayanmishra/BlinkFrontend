@@ -21,7 +21,7 @@
     "@react-navigation/native": "^6.1.18",
     "@react-navigation/native-stack": "^6.11.0",
     "@react-navigation/stack": "^6.4.1",
-    "@stomp/stompjs": "^7.0.0",
+    "@stomp/stompjs": "^6.1.2",
     "@terrylinla/react-native-sketch-canvas": "^0.8.0",
     "axios": "^1.7.7",
     "expo": "^51.0.39",
@@ -44,6 +44,7 @@
     "react-native-dropdown-picker": "^5.4.6",
     "react-native-elements": "^3.4.3",
     "react-native-gesture-handler": "~2.16.1",
+    "react-native-get-random-values": "^1.11.0",
     "react-native-permissions": "^5.0.2",
     "react-native-qrcode-scanner": "^1.5.5",
     "react-native-qrcode-svg": "^6.3.12",
@@ -52,9 +53,12 @@
     "react-native-safe-area-context": "^4.11.1",
     "react-native-screens": "^3.34.0",
     "react-native-svg": "^15.8.0",
+    "react-native-uuid": "^2.0.3",
     "react-native-vector-icons": "^10.2.0",
     "react-native-web": "~0.19.10",
-    "sockjs-client": "^1.6.1"
+    "socket.io-client": "^4.8.1",
+    "sockjs-client": "^1.5.0",
+    "uuid": "^11.0.3"
   },
   "devDependencies": {
     "@babel/core": "^7.20.0",
@@ -62,6 +66,7 @@
     "@types/react": "~18.2.45",
     "@types/react-native-vector-icons": "^6.4.18",
     "@types/react-test-renderer": "^18.0.7",
+    "@types/socket.io-client": "^1.4.36",
     "@types/sockjs-client": "^1.5.4",
     "@types/ws": "^8.5.13",
     "jest": "^29.2.1",

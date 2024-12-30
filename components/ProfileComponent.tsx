@@ -118,7 +118,7 @@ const ProfileComponent = ({ navigation, route }) => {
         phoneNumber: number, // Match the backend field name
       };
       // Send the PUT request
-      const response = await fetch('http://192.168.1.226:8080/api/users/update-number', {
+      const response = await fetch('http://192.168.77.102:8080/api/users/update-number', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -150,7 +150,7 @@ const ProfileComponent = ({ navigation, route }) => {
         email: email, // Match the backend field name
       };
       // Send the PUT request
-      const response = await fetch('http://192.168.1.226:8080/api/users/update-email', {
+      const response = await fetch('http://192.168.77.102:8080/api/users/update-email', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
