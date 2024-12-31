@@ -11,77 +11,7 @@ import SockJS from 'sockjs-client';
 
 const { width, height } = Dimensions.get('window');
 
-// Dummy Data for conversation
-// const messagesData = [
-//   {
-//     id: '1',
-//     text: 'Hello, how are you?',
-//     time: '8:24 AM',
-//     type: 'received',
-//   },
-//   {
-//     id: '2',
-//     text: 'I am good man... You?',
-//     time: '8:24 AM',
-//     type: 'sent',
-//   },
-//   {
-//     id: '3',
-//     text: 'I\'m doing well, thank you for asking! How can I help you today?',
-//     time: '8:24 AM',
-//     type: 'received',
-//   },
-//   {
-//     id: '4',
-//     text: 'Can you send me 12,000 rupees now, I need to purchase a shoe',
-//     time: '8:24 AM',
-//     type: 'sent',
-//   },
-//   {
-//     id: '5',
-//     text: 'Cool I\'m sending now 😎',
-//     time: '8:25 AM',
-//     type: 'received',
-//   },
-//   {
-//     id: '6',
-//     text: 'Nice fit dude... 😎',
-//     time: '8:26 AM',
-//     type: 'received',
-//     image: 'https://images.pexels.com/photos/1387022/pexels-photo-1387022.jpeg?cs=srgb&dl=book-aesthetic-books-old-books-open-books-1387022.jpg&fm=jpg',
-//   },
-//   {
-//     id: '7',
-//     // text: 'Nice fit dude... 😎',
-//     time: '8:26 AM',
-//     type: 'sent',
-//     image: require('@/assets/images/Avatar4.jpg'),
-//   },
-// ];
-
-// Ensure initial dummy data has unique IDs
-// const ensureUniqueIds = (data) => {
-//   const existingIds = new Set();
-//   return data.map(item => {
-//     let id = item.id;
-//     while (existingIds.has(id)) {
-//       id = generateRandomId([...existingIds]);
-//     }
-//     existingIds.add(id);
-//     return { ...item, id };
-//   });
-// };
-
-// Check for duplicate IDs in the initial dummy data
-// const checkForDuplicateIds = (data) => {
-//   const ids = data.map(item => item.id);
-//   const hasDuplicates = ids.some((id, index) => ids.indexOf(id) !== index);
-//   if (hasDuplicates) {
-//     console.error("Duplicate IDs found in initial data:", ids);
-//   }
-// };
-
-const generateRandomId = (existingIds) => {
+const generateRandomId = (existingIds: string[]) => {
   let id;
   do {
     id = Math.random().toString(36).substr(2, 9);
@@ -89,19 +19,42 @@ const generateRandomId = (existingIds) => {
   return id;
 };
 
-const ChatScreen = ({ route, navigation }) => {
+const ensureUniqueIds = (data: any[]) => {
+  const existingIds = new Set<string>();
+  return data.map(item => {
+    let id = item.id;
+    while (existingIds.has(id)) {
+      id = generateRandomId([...existingIds]);
+    }
+    existingIds.add(id);
+    return { ...item, id };
+  });
+};
+
+const ensureMessageFields = (message: any, chatData: any) => {
+  return {
+    id: message.id || generateRandomId([]),
+    type: message.type || 'TEXT',
+    content: message.content || '',
+    sender: message.sender || { id: chatData.id, name: chatData.name },
+    recipient: message.recipient || { id: 'unknown', name: 'Unknown' },
+  };
+};
+
+import { StackNavigationProp } from '@react-navigation/stack';
+import { RouteProp } from '@react-navigation/native';
+
+type ChatScreenRouteProp = RouteProp<{ params: { chatData: any } }, 'params'>;
+type ChatScreenNavigationProp = StackNavigationProp<any>;
+
+const ChatScreen = ({ route, navigation }: { route: ChatScreenRouteProp; navigation: ChatScreenNavigationProp }) => {
   const { chatData } = route.params;
-  const [messages, setMessages] = useState([]); // Initialize with an empty array
+  const [messages, setMessages] = useState<{ id: string; type: string; content: string; sender: string; recipient: string }[]>([]); // Initialize with an empty array
   const [text, setText] = useState('');
   const [modalVisible, setModalVisible] = useState(false);
-  const [starredMessages, setStarredMessages] = useState({});
+  const [starredMessages, setStarredMessages] = useState<{ [key: string]: boolean }>({});
   const [attachmentModalVisible, setAttachmentModalVisible] = useState(false);
-  const client = useRef(null);
-
-  // Check for duplicate IDs in the initial dummy data
-  // useEffect(() => {
-  //   checkForDuplicateIds(messages);
-  // }, []);
+  const client = useRef<Client | null>(null);
 
   useEffect(() => {
     // Initialize WebSocket connection using SockJS
@@ -122,14 +75,16 @@ const ChatScreen = ({ route, navigation }) => {
 
     client.current.onConnect = () => {
       console.log('Connected to WebSocket');
-      client.current.subscribe('/chatroom/public', (message) => {
-        const receivedMessage = JSON.parse(message.body);
+      client.current?.subscribe('/chatroom/public', (message) => {
+        let receivedMessage = JSON.parse(message.body);
+        console.log("Received message:", receivedMessage); // Log the received message
+        receivedMessage = ensureMessageFields(receivedMessage, chatData); // Ensure all necessary fields are populated
         setMessages((prevMessages) => {
-          const updatedMessages = [...prevMessages, receivedMessage];
+          const updatedMessages = ensureUniqueIds([...prevMessages, receivedMessage]);
           const ids = updatedMessages.map(msg => msg.id);
           const hasDuplicates = ids.some((id, index) => ids.indexOf(id) !== index);
           if (hasDuplicates) {
-            console.error("Duplicate IDs found:", ids);
+            console.error("Duplicate IDs found after receiving message:", ids);
           }
           return updatedMessages;
         });
@@ -148,7 +103,7 @@ const ChatScreen = ({ route, navigation }) => {
         client.current.deactivate();
       }
     };
-  }, []);
+  }, [chatData]);
 
   const openModal = () => setModalVisible(true);
   const closeModal = () => setModalVisible(false);
@@ -160,24 +115,19 @@ const ChatScreen = ({ route, navigation }) => {
         id: generateRandomId(existingIds), // Use custom function to generate a unique ID
         type: 'TEXT',
         content: text,
-        sender: 'QQYU5ZWG', // Assuming chatData contains senderId
-        recipient: 'SV912UKB', // Assuming chatData contains recipientId
-        time: new Date().toLocaleTimeString(),
+        sender: '389D834A', // Use chatData for sender information
+        recipient: 'YKC29IRN', // Replace with actual recipient information
       };
+      console.log('Chat Data:', chatData);
       console.log("New message ID:", newMessage.id); // Log the new message ID
-      client.current.publish({
-        destination: '/app/message',
-        body: JSON.stringify(newMessage),
-      });
-      setMessages((prevMessages) => {
-        const updatedMessages = [...prevMessages, newMessage];
-        const ids = updatedMessages.map(msg => msg.id);
-        const hasDuplicates = ids.some((id, index) => ids.indexOf(id) !== index);
-        if (hasDuplicates) {
-          console.error("Duplicate IDs found:", ids);
-        }
-        return updatedMessages;
-      });
+      if (client.current) {
+        client.current.publish({
+          destination: '/app/message',
+          body: JSON.stringify(newMessage),
+        });
+      } else {
+        console.error('WebSocket client is not connected.');
+      }
       setText('');
     }
   };
@@ -212,22 +162,22 @@ const ChatScreen = ({ route, navigation }) => {
 
   const pickDocument = async () => {
     const result = await DocumentPicker.getDocumentAsync({});
-    if (result.type === "success") {
+    if (result.type === "success" && 'uri' in result) {
       // Handle document data here
       console.log("Document selected:", result.uri);
     }
     closeAttachmentModal();
   };
 
-  const handleLongPress = (messageId) => {
+  const handleLongPress = (messageId: string) => {
     setStarredMessages((prevStarredMessages) => ({
       ...prevStarredMessages,
       [messageId]: !prevStarredMessages[messageId],
     }));
   };
 
-  const renderMessage = ({ item }) => {
-    const isSent = item.type === 'sent';
+  const renderMessage = ({ item }: { item: any }) => {
+    const isSent = item.sender === '389D834A'; // Adjust this condition based on your sender logic
     const isStarred = starredMessages[item.id];
   
     return (
@@ -238,19 +188,18 @@ const ChatScreen = ({ route, navigation }) => {
           isSent ? styles.sentMessage : styles.receivedMessage,
         ]}
       >
-        
         {item.image && (
           <Image 
-            source={item.image}
+            source={{ uri: item.image }} // Ensure the image URI is correctly accessed
             style={styles.messageImage} 
           />
         )}
-        {item.text && (
+        {item.content && ( // Ensure the correct property is accessed for the message content
           <Text style={[
             styles.messageText,
             isSent ? styles.sentMessageText : styles.receivedMessageText
           ]}>
-            {item.text}
+            {item.content}
           </Text>
         )}
         <View style={styles.timeContainer}>
@@ -308,7 +257,7 @@ const ChatScreen = ({ route, navigation }) => {
       <FlatList
         data={messages}
         renderItem={renderMessage}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => item.id} // Ensure keyExtractor uses unique IDs
         contentContainerStyle={styles.messagesList}
         
       />
@@ -437,6 +386,12 @@ const styles = StyleSheet.create({
   messageText: {
     fontSize: width * 0.04,
   },
+  sentMessageText: {
+    color: '#fff',
+  },
+  receivedMessageText: {
+    color: '#000',
+  },
   timeText: {
     fontSize: width * 0.03,
     color: '#fff',
@@ -447,6 +402,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'flex-end',
     alignItems: 'center',
+  },
+  sentTime: {
+    color: '#fff',
+  },
+  receivedTime: {
+    color: '#000',
   },
   timeImageContainer: {
     paddingLeft: width * 0.01,
